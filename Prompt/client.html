@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncText - Collaborative Editor</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e74c3c;
+        }
+        .status-dot.connected {
+            background: #27ae60;
+        }
+        .editor-container {
+            position: relative;
+            height: 500px;
+        }
+        #editor {
+            width: 100%;
+            height: 100%;
+            border: none;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+            outline: none;
+        }
+        .cursors {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        .cursor {
+            position: absolute;
+            width: 2px;
+            height: 20px;
+            background: #3498db;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>SyncText</h1>
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Disconnected</span>
+                <span id="userCount">0 users</span>
+            </div>
+        </div>
+        <div class="editor-container">
+            <textarea id="editor" placeholder="Start typing to collaborate in real-time..."></textarea>
+            <div class="cursors" id="cursors"></div>
+        </div>
+    </div>
+
+    <script>
+        class SyncTextClient {
+            constructor() {
+                this.socket = io('http://localhost:8000');
+                this.editor = document.getElementById('editor');
+                this.statusDot = document.getElementById('statusDot');
+                this.statusText = document.getElementById('statusText');
+                this.userCount = document.getElementById('userCount');
+                this.cursors = document.getElementById('cursors');
+                
+                this.documentId = this.getDocumentId();
+                this.isUpdating = false;
+                
+                this.setupEventListeners();
+                this.setupSocketListeners();
+            }
+            
+            getDocumentId() {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('doc') || 'default';
+            }
+            
+            setupEventListeners() {
+                this.editor.addEventListener('input', (e) => {
+                    if (!this.isUpdating) {
+                        this.handleTextChange();
+                    }
+                });
+                
+                this.editor.addEventListener('selectionchange', () => {
+                    this.handleCursorChange();
+                });
+            }
+            
+            setupSocketListeners() {
+                this.socket.on('connect', () => {
+                    this.updateStatus(true, 'Connected');
+                    this.socket.emit('join_document', { document_id: this.documentId });
+                });
+                
+                this.socket.on('disconnect', () => {
+                    this.updateStatus(false, 'Disconnected');
+                });
+                
+                this.socket.on('document_state', (data) => {
+                    this.isUpdating = true;
+                    this.editor.value = data.content;
+                    this.isUpdating = false;
+                });
+                
+                this.socket.on('text_change', (data) => {
+                    if (data.user_id !== this.socket.id) {
+                        this.isUpdating = true;
+                        this.editor.value = data.content;
+                        this.isUpdating = false;
+                    }
+                });
+                
+                this.socket.on('user_joined', (data) => {
+                    this.userCount.textContent = `${data.total_users} users`;
+                });
+                
+                this.socket.on('cursor_change', (data) => {
+                    this.updateCursor(data.user_id, data.position);
+                });
+            }
+            
+            handleTextChange() {
+                const content = this.editor.value;
+                this.socket.emit('text_change', {
+                    content: content,
+                    operation: { type: 'insert' } // Simplified operation
+                });
+            }
+            
+            handleCursorChange() {
+                const position = this.editor.selectionStart;
+                this.socket.emit('cursor_change', { position: position });
+            }
+            
+            updateStatus(connected, text) {
+                this.statusDot.className = `status-dot ${connected ? 'connected' : ''}`;
+                this.statusText.textContent = text;
+            }
+            
+            updateCursor(userId, position) {
+                // Simplified cursor rendering
+                console.log(`User ${userId} cursor at position ${position}`);
+            }
+        }
+        
+        // Initialize the client
+        new SyncTextClient();
+    </script>
+</body>
+</html>
