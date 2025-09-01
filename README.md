@@ -2,7 +2,7 @@
 
 SyncText as the name suggest is aimed to be a webapp in which multiple users can concurrently type and see the changes reflected by each in realtime.
 
-## Steps to build this project
+## Questions 
 
 Following are the questions that comes to my mind
 
@@ -11,3 +11,7 @@ Following are the questions that comes to my mind
 - Hosting
 - Database
 - Concurrency
+
+## Steps to build
+
+- Make a web notes app
